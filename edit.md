@@ -1,28 +1,18 @@
--- ====================== EGODA SCHEMA + SEED (SAFE) ======================
-SET NAMES utf8mb4;
-SET time_zone = '+09:00';
+SET FOREIGN_KEY_CHECKS=0; -- 테이블 생성/데이터 삽입 전 외래 키 제약 조건 임시 비활성화 (선택 사항)
 
-CREATE DATABASE IF NOT EXISTS `hotel`
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-USE `hotel`;
-
-START TRANSACTION;
-SET FOREIGN_KEY_CHECKS=0;
-
--- 1) 사용자
+-- 1) 사용자 계정
 CREATE TABLE IF NOT EXISTS `app_user` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `name` varchar(50)  NOT NULL,
-  `phone` varchar(20)  NOT NULL,
-  `email` varchar(100) NOT NULL,
-  `password` varchar(255) NOT NULL,
-  `date_of_birth` date NOT NULL,
-  `address` text NOT NULL,
-  `created_on` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `role` ENUM('USER','ADMIN','BUSINESS') NOT NULL DEFAULT 'USER',
+  `id`          BIGINT NOT NULL AUTO_INCREMENT,
+  `name`        VARCHAR(100) NOT NULL,
+  `phone`       VARCHAR(20) NULL,
+  `email`       VARCHAR(255) NOT NULL,
+  `password`    VARCHAR(255) NOT NULL,
+  `date_of_birth` DATE NULL,
+  `address`     VARCHAR(512) NULL,
+  `role`        ENUM('ADMIN','BUSINESS','USER') NOT NULL,
+  `provider`    ENUM('LOCAL','KAKAO','NAVER','GOOGLE') NOT NULL,
+  `created_on`  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_user_phone` (`phone`),
   UNIQUE KEY `uq_user_email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -30,11 +20,11 @@ CREATE TABLE IF NOT EXISTS `app_user` (
 CREATE TABLE IF NOT EXISTS `Hotel` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT NOT NULL,
-  `business_id` BIGINT NOT NULL,
-  `name` varchar(100) NOT NULL,
-  `address` varchar(255) NOT NULL,
-  `star_rating` int NOT NULL,
-  `description` text NULL,
+  `business_id` BIGINT NULL,
+  `name` varchar(255) NOT NULL,
+  `address` varchar(512) NOT NULL,
+  `star_rating` INT NOT NULL DEFAULT 1,
+  `description` TEXT NULL,
   `country` varchar(50) NOT NULL,
   `status` ENUM('PENDING','APPROVED','SUSPENDED') NOT NULL DEFAULT 'PENDING',
   PRIMARY KEY (`id`),
@@ -59,6 +49,7 @@ CREATE TABLE IF NOT EXISTS `hotel_image` (
     FOREIGN KEY (`hotel_id`) REFERENCES `Hotel`(`id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE INDEX IF NOT EXISTS idx_himg_cover_sort
   ON `hotel_image` (`hotel_id`, `is_cover`, `sort_no`);
 
@@ -126,6 +117,7 @@ CREATE TABLE IF NOT EXISTS `room_image` (
     FOREIGN KEY (`room_id`) REFERENCES `Room`(`id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE INDEX IF NOT EXISTS idx_rimg_cover_sort
   ON `room_image` (`room_id`, `is_cover`, `sort_no`);
 
@@ -165,6 +157,7 @@ CREATE TABLE IF NOT EXISTS `Reservation` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT NOT NULL,
   `room_id` BIGINT NOT NULL,
+  `num_rooms` INT NOT NULL DEFAULT 1, -- 추가된 칼럼
   `transaction_id` varchar(255) NULL,
   `num_adult` int NOT NULL DEFAULT 0,
   `num_kid`   int NOT NULL DEFAULT 0,
@@ -182,22 +175,24 @@ CREATE TABLE IF NOT EXISTS `Reservation` (
     FOREIGN KEY (`room_id`) REFERENCES `Room` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-ALTER TABLE `Reservation` -- 1) 예약에 '잡은 객실 수' 칼럼 추가
-  ADD COLUMN `num_rooms` INT NOT NULL DEFAULT 1 AFTER `room_id`;
-  CREATE INDEX idx_res_status_expires ON `Reservation` (`status`, `expires_at`);
+-- 예약 테이블에 인덱스 추가 (MariaDB/MySQL 모두 지원)
+CREATE INDEX idx_res_status_expires ON `Reservation` (`status`, `expires_at`);
 
--- 11) 결제
+-- 11) 결제 (구현 코드 기준으로 보정)
 CREATE TABLE IF NOT EXISTS `Payment` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `reservation_id` BIGINT NOT NULL,
-  `payment_method` varchar(50) NOT NULL,
-  `base_price` int NOT NULL,
-  `total_price` int NOT NULL,
-  `tax` int NOT NULL DEFAULT 0,
-  `discount` int NOT NULL DEFAULT 0,
-  `status` ENUM('PAID','CANCELLED','REFUNDED') NOT NULL DEFAULT 'PAID',
-  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `refunded_at` timestamp NULL,
+  `amount` DECIMAL(12,2) NOT NULL,
+  `method` VARCHAR(50) NULL,
+  `transaction_id` VARCHAR(100) NULL,
+  `base_price` DECIMAL(12,2) NULL,
+  `total_price` DECIMAL(12,2) NULL,
+  `tax` DECIMAL(12,2) NULL DEFAULT 0,
+  `discount` DECIMAL(12,2) NULL DEFAULT 0,
+  `status` ENUM('PENDING','COMPLETED','FAILED','REFUNDED') NOT NULL DEFAULT 'PENDING',
+  `paid_at` TIMESTAMP NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `refunded_at` TIMESTAMP NULL,
   `receipt_url` VARCHAR(512) NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_receipt_url` (`receipt_url`),
@@ -206,51 +201,85 @@ CREATE TABLE IF NOT EXISTS `Payment` (
     FOREIGN KEY (`reservation_id`) REFERENCES `Reservation` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 12) 쿠폰
-CREATE TABLE IF NOT EXISTS `Coupon` (
+-- 12) 쿠폰 (구현 코드 기준으로 보정: 테이블명 및 컬럼)
+CREATE TABLE IF NOT EXISTS `coupons` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `user_id` BIGINT NOT NULL,
-  `name` varchar(255) NOT NULL,
-  `code` varchar(255) NOT NULL,
+  `code` VARCHAR(50) NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `description` TEXT NULL,
   `discount_type` ENUM('PERCENTAGE','FIXED_AMOUNT') NOT NULL,
-  `discount_value` int NOT NULL,
-  `min_spend` int NOT NULL DEFAULT 0,
-  `valid_from` datetime NOT NULL,
-  `valid_to`   datetime NULL,
-  `is_active` boolean NOT NULL DEFAULT true,
+  `discount_value` DECIMAL(10,2) NOT NULL,
+  `min_order_amount` DECIMAL(10,2) NULL,
+  `max_discount_amount` DECIMAL(10,2) NULL,
+  `usage_limit` INT NULL,
+  `used_count` INT NOT NULL DEFAULT 0,
+  `valid_from` DATETIME NOT NULL,
+  `valid_until` DATETIME NOT NULL,
+  `status` ENUM('ACTIVE','INACTIVE','EXPIRED') NOT NULL DEFAULT 'ACTIVE',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_coupon_code` (`code`),
-  KEY `idx_coupon_user` (`user_id`),
-  CONSTRAINT `FK_User_TO_Coupon_1`
-    FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
+  UNIQUE KEY `uq_coupon_code` (`code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 13) 리뷰
+-- 13) 리뷰 (구현 코드 기준으로 보정)
 CREATE TABLE IF NOT EXISTS `Review` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
-  `reservation_id` BIGINT NOT NULL,
-  `wrote_on` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `star_rating` int NOT NULL DEFAULT 5,
-  `content` text NULL,
-  `image` text NULL,
+  `hotel_id` BIGINT NOT NULL,
+  `user_id` BIGINT NOT NULL,
+  `reservation_id` BIGINT NULL,
+  `wrote_on` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `star_rating` INT NOT NULL DEFAULT 5,
+  `content` TEXT NULL,
+  `image` TEXT NULL,
+  `hidden` BOOLEAN NOT NULL DEFAULT FALSE,
+  `reported` BOOLEAN NOT NULL DEFAULT FALSE,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_review_reservation` (`reservation_id`),
+  KEY `idx_rev_hotel` (`hotel_id`),
+  KEY `idx_rev_user` (`user_id`),
   CONSTRAINT `FK_Reservation_TO_Review_1`
-    FOREIGN KEY (`reservation_id`) REFERENCES `Reservation` (`id`)
+    FOREIGN KEY (`reservation_id`) REFERENCES `Reservation` (`id`),
+  CONSTRAINT `FK_User_TO_Review_1`
+    FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`),
+  CONSTRAINT `FK_Hotel_TO_Review_1`
+    FOREIGN KEY (`hotel_id`) REFERENCES `Hotel` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ============================== SEED ==============================
+-- 14) 사업자 (구현 코드 기준으로 보정)
+CREATE TABLE IF NOT EXISTS `business` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `business_name` VARCHAR(200) NOT NULL,
+  `business_number` VARCHAR(50) NOT NULL,
+  `address` VARCHAR(500) NOT NULL,
+  `phone` VARCHAR(20) NULL,
+  `status` ENUM('PENDING','APPROVED','REJECTED','SUSPENDED') NOT NULL DEFAULT 'PENDING',
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_business_number` (`business_number`),
+  KEY `idx_business_user` (`user_id`),
+  CONSTRAINT `FK_User_TO_Business_1`
+    FOREIGN KEY (`user_id`) REFERENCES `app_user` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+-- =================================================================
+-- SEED DATA 삽입
+-- =================================================================
 
--- 유저
-INSERT INTO app_user (id, name, phone, email, password, date_of_birth, address, role)
+-- 기본 사용자 계정 생성
+INSERT INTO app_user (id, name, phone, email, password, date_of_birth, address, role, provider, created_on)
 VALUES
-  (1,'관리자','010-0000-0000','admin@egoda.local','{noop}pw','1990-01-01','Seoul','ADMIN')
-ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role);
-
-INSERT INTO app_user (id, name, phone, email, password, date_of_birth, address, role)
-VALUES
-  (2,'오너','010-1111-1111','owner@egoda.local','{noop}pw','1990-01-01','Seoul','BUSINESS')
-ON DUPLICATE KEY UPDATE name=VALUES(name), role=VALUES(role);
+  (1, '시스템 관리자', '010-0000-0000', 'admin@hotel.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9b2.lQgzW1QR/Rm', '1985-01-01', '서울특별시 중구 관리자동 1번지', 'ADMIN', 'LOCAL', NOW()),
+  (2, '호텔 오너', '010-1111-1111', 'owner@egoda.local', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9b2.lQgzW1QR/Rm', '1990-01-01', 'Seoul', 'BUSINESS', 'LOCAL', NOW()),
+  (3, '일반 사용자', '010-2222-2222', 'user@egoda.local', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9b2.lQgzW1QR/Rm', '1995-05-15', 'Busan', 'USER', 'LOCAL', NOW()),
+  (4, 'Super Admin', '010-9999-9999', 'superadmin@hotel.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9b2.lQgzW1QR/Rm', '1980-01-01', 'Seoul Gangnam-gu Admin Center', 'ADMIN', 'LOCAL', NOW())
+ON DUPLICATE KEY UPDATE
+  name=VALUES(name),
+  role=VALUES(role),
+  password=VALUES(password),
+  provider=VALUES(provider),
+  created_on=VALUES(created_on);
 
 -- 호텔 (APPROVED)
 INSERT INTO `Hotel` (id, user_id, business_id, name, address, star_rating, description, country, status)
@@ -291,7 +320,7 @@ VALUES
   (3,'OFF_PEAK','WEEKDAY', DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), DATE_ADD(CURRENT_DATE(), INTERVAL 180 DAY),  80000)
 ON DUPLICATE KEY UPDATE price=VALUES(price), end_date=VALUES(end_date);
 
--- (옵션) 오늘 재고
+-- 오늘 재고 (옵션)
 INSERT INTO `Room_Inventory` (room_id, `date`, total_quantity, available_quantity)
 VALUES
   (1, CURRENT_DATE(), 5, 3),
@@ -299,7 +328,7 @@ VALUES
   (3, CURRENT_DATE(), 5, 4)
 ON DUPLICATE KEY UPDATE available_quantity=VALUES(available_quantity);
 
--- (옵션) 편의시설 + 매핑
+-- 편의시설 + 매핑 (옵션)
 INSERT INTO `Amenity` (id, name, fee_type, is_active, category)
 VALUES
   (1,'무료 Wi-Fi','FREE',true,'IN_HOTEL'),
@@ -314,9 +343,11 @@ INSERT IGNORE INTO `Hotel_Amenity` (hotel_id, amenity_id) VALUES
 SET FOREIGN_KEY_CHECKS=1;
 COMMIT;
 
--- 빠른 검증
+-- =================================================================
+-- 빠른 검증 (가격 확인)
+-- =================================================================
 SELECT h.id, h.name, MIN(rpp.price) AS lowestPrice
 FROM `Hotel` h
-LEFT JOIN `Room` r ON r.hotel_id=h.id
-LEFT JOIN `Room_Price_Policy` rpp ON rpp.room_id=r.id
+LEFT JOIN `Room` r ON r.hotel_id = h.id
+LEFT JOIN `Room_Price_Policy` rpp ON rpp.room_id = r.id
 GROUP BY h.id, h.name;

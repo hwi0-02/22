@@ -54,6 +54,7 @@ public class SecurityConfig {
         "/api/test/**",
         "/api/users/register",
         "/api/users/login",
+    "/api/admins/register",
         "/api/password/**",
         "/api/user/info",
         "/api/hotels/**",

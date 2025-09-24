@@ -1,5 +1,6 @@
 // src/router/index.js
 import { createRouter, createWebHistory } from "vue-router"
+import http from "@/api/http.js";
 
 // Auth & static
 import Login from "@/components/user/login_page/Login.vue"
@@ -46,8 +47,75 @@ const routes = [
   { path: "/oauth2/redirect", component: OAuth2Redirect },
 ]
 
-export default createRouter({
+// 관리자 라우트 추가
+routes.push({
+  path: "/admin",
+  component: () => import("@/components/admin/AdminLayout.vue"),
+  meta: { requiresAdmin: true },
+  children: [
+    { path: "", redirect: "/admin/dashboard" },
+    { path: "dashboard", component: () => import("@/components/admin/AdminDashboard.vue") },
+    { path: "users", component: () => import("@/components/admin/UserManagement.vue") },
+    { path: "businesses", component: () => import("@/components/admin/HotelManagement.vue") },
+    { path: "hotels", component: () => import("@/components/admin/AdminHotelManagement.vue") },
+    { path: "reservations", component: () => import("@/components/admin/ReservationMonitoring.vue") },
+    { path: "sales", component: () => import("@/components/admin/SalesManagement.vue") },
+    { path: "payments", component: () => import("@/components/admin/PaymentManagement.vue") },
+    { path: "reviews", component: () => import("@/components/admin/ReviewManagement.vue") },
+    { path: "coupons", component: () => import("@/components/admin/CouponManagement.vue") }
+  ]
+});
+
+async function checkAdminRole() {
+  try {
+    const resp = await http.get('/user/info');
+    const serverRole = resp?.data?.role;
+    if (serverRole) {
+      localStorage.setItem('userRole', serverRole);
+      return serverRole === 'ADMIN';
+    }
+  } catch (e) {
+    if (e?.response?.status === 401) {
+      return false;
+    }
+  }
+  const userRole = localStorage.getItem('userRole');
+  if (userRole) return userRole === 'ADMIN';
+  const userStr = localStorage.getItem('user');
+  if (userStr) {
+    try {
+      const user = JSON.parse(userStr);
+      if (user?.role) {
+        localStorage.setItem('userRole', user.role);
+        return user.role === 'ADMIN';
+      }
+    } catch (e) {}
+  }
+  return false;
+}
+
+const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior: () => ({ top: 0 })
-})
+});
+
+router.beforeEach(async (to, from, next) => {
+  if (to.meta.requiresAuth) {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('로그인이 필요합니다.');
+      next('/login');
+      return;
+    }
+  }
+  if (to.meta.requiresAdmin) {
+    const isAdmin = await checkAdminRole();
+    if (isAdmin) next();
+    else { alert('관리자 권한이 필요합니다.'); next('/'); }
+  } else {
+    next();
+  }
+});
+
+export default router;

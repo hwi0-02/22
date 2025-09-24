@@ -33,6 +33,7 @@ public class JwtUtil {
         claims.put("userId", user.getId());
         claims.put("email", user.getEmail());
         claims.put("name", user.getName());
+        claims.put("role", user.getRole().toString());
         claims.put("provider", user.getProvider().toString());
         
         log.debug("Generating JWT token for user: {}", user.getEmail());

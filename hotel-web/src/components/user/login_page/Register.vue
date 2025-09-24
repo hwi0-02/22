@@ -31,6 +31,24 @@
                 <input type="email" id="email" v-model="email" placeholder="이메일" />
                 </div>
 
+                <!-- 전화번호 -->
+                <div class="input-group">
+                <label for="phone">전화번호</label>
+                <input type="tel" id="phone" v-model="phone" placeholder="010-1234-5678" />
+                </div>
+
+                <!-- 생년월일 -->
+                <div class="input-group">
+                <label for="dateOfBirth">생년월일</label>
+                <input type="date" id="dateOfBirth" v-model="dateOfBirth" />
+                </div>
+
+                <!-- 주소 -->
+                <div class="input-group">
+                <label for="address">주소</label>
+                <input type="text" id="address" v-model="address" placeholder="주소를 입력해주세요" />
+                </div>
+
                 <!-- 비밀번호 -->
                 <div class="input-group">
                     <label for="password">비밀번호</label>
@@ -102,6 +120,9 @@ export default {
       firstName: "",
       lastName: "",
       email: "",
+      phone: "",
+      dateOfBirth: "",
+      address: "",
       password: "",
       confirmPassword: "",
       agree: false,
@@ -133,6 +154,21 @@ export default {
         return;
       }
       
+      if (!this.phone || this.phone.trim() === "") {
+        alert("전화번호를 입력해주세요.");
+        return;
+      }
+      
+      if (!this.dateOfBirth || this.dateOfBirth.trim() === "") {
+        alert("생년월일을 입력해주세요.");
+        return;
+      }
+      
+      if (!this.address || this.address.trim() === "") {
+        alert("주소를 입력해주세요.");
+        return;
+      }
+      
       if (!this.password || this.password.trim() === "") {
         alert("비밀번호를 입력해주세요.");
         return;
@@ -147,6 +183,24 @@ export default {
       const emailRegex = /^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
       if (!emailRegex.test(this.email)) {
         alert("올바른 이메일 형식을 입력해주세요.");
+        return;
+      }
+      
+      // 전화번호 형식 검증 (010-1234-5678 형태)
+      const phoneRegex = /^010-\d{4}-\d{4}$/;
+      if (!phoneRegex.test(this.phone)) {
+        alert("올바른 전화번호 형식을 입력해주세요. (예: 010-1234-5678)");
+        return;
+      }
+      
+      // 생년월일 검증 (18세 이상)
+      const birthDate = new Date(this.dateOfBirth);
+      const today = new Date();
+      const age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      
+      if (age < 18 || (age === 18 && monthDiff < 0) || (age === 18 && monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        alert("18세 이상만 회원가입이 가능합니다.");
         return;
       }
       
@@ -169,12 +223,13 @@ export default {
       }
 
       try {
-  const response = await http.post("/users/register", {
+        const response = await http.post("/users/register", {
           name: this.lastName + this.firstName,
           email: this.email,
           password: this.password,
-          phone: "010-0000-0000",
-          address: "서울"
+          phone: this.phone,
+          dateOfBirth: this.dateOfBirth,
+          address: this.address
         });
         alert("회원가입 성공!");
         this.$router.push("/login");

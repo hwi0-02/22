@@ -41,4 +41,12 @@ public class Reservation {
 
     @Column(name="transaction_id")
     private String transactionId;
+
+    @Column(name="created_at", nullable = true)
+    private Instant createdAt;
+
+    @PrePersist
+    protected void onCreate() {
+        if (createdAt == null) createdAt = Instant.now();
+    }
 }

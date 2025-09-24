@@ -163,4 +163,12 @@ public class ReservationService {
                 .endDate(r.getEndDate())
                 .build();
     }
+
+    @Transactional(readOnly = true)
+    public long countByHotelId(Long hotelId) {
+        List<Room> rooms = roomRepo.findByHotelId(hotelId);
+        if (rooms.isEmpty()) return 0L;
+        List<Long> roomIds = rooms.stream().map(Room::getId).toList();
+        return resRepo.countByRoomIdIn(roomIds);
+    }
 }

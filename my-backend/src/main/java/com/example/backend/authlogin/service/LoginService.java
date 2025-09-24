@@ -1,6 +1,8 @@
 package com.example.backend.authlogin.service;
 
 import java.util.Optional;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -73,11 +75,11 @@ public class LoginService {
         }
         
         User user = userOpt.get();
-        log.info("사용자 발견 - ID: {}, Provider: {}", user.getId(), user.getProvider());
+        log.info("사용자 발견 - ID: {}", user.getId());
         
-        // 소셜 로그인 사용자는 일반 로그인 불가
+        // 비밀번호가 없는 사용자는 로그인 불가
         if (user.getPassword() == null || user.getPassword().trim().isEmpty()) {
-            log.warn("로그인 실패 - 소셜 로그인 사용자: {}", normalizedEmail);
+            log.warn("로그인 실패 - 비밀번호가 설정되지 않은 사용자: {}", normalizedEmail);
             return Optional.empty();
         }
         
@@ -109,11 +111,6 @@ public class LoginService {
 
             User user = userOpt.get();
             
-            // 소셜 로그인 사용자는 비밀번호 변경 불가
-            if (user.getProvider() != User.Provider.LOCAL) {
-                return false;
-            }
-
             // 새 비밀번호 암호화 후 저장
             user.setPassword(passwordEncoder.encode(newPassword));
             loginRepository.save(user);
@@ -123,4 +120,48 @@ public class LoginService {
             return false;
         }
     }
+    
+    // 새로운 메서드: date_of_birth 처리
+    public User createUserWithDateOfBirth(String name, String email, String password, 
+                                         String phone, String address, LocalDate dateOfBirth) {
+        // 중복 이메일 체크
+        String normalizedEmail = email.toLowerCase().trim();
+        if (loginRepository.existsByEmail(normalizedEmail)) {
+            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+        }
+        
+        User user = User.builder()
+                .name(name)
+                .email(normalizedEmail)
+                .password(passwordEncoder.encode(password))
+                .phone(phone)
+                .address(address)
+                .dateOfBirth(dateOfBirth)
+                .provider(User.Provider.LOCAL)
+                .build();
+                
+        return loginRepository.save(user);
+    }
+
+    // 관리자 생성: ADMIN 역할로 사용자 생성
+    public User createAdminWithDateOfBirth(String name, String email, String password,
+                                           String phone, String address, LocalDate dateOfBirth) {
+        String normalizedEmail = email.toLowerCase().trim();
+        if (loginRepository.existsByEmail(normalizedEmail)) {
+            throw new IllegalArgumentException("이미 가입된 이메일입니다.");
+        }
+
+        User user = User.builder()
+                .name(name)
+                .email(normalizedEmail)
+                .password(passwordEncoder.encode(password))
+                .phone(phone)
+                .address(address)
+                .dateOfBirth(dateOfBirth)
+                .provider(User.Provider.LOCAL)
+                .build();
+        user.setRole(User.Role.ADMIN);
+        return loginRepository.save(user);
+    }
+
 }

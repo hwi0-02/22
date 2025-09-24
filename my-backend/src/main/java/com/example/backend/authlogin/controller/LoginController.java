@@ -42,16 +42,31 @@ public class LoginController {
             return ResponseEntity.badRequest().body("비밀번호를 입력해주세요.");
         if (req.getPassword().length() < 6)
             return ResponseEntity.badRequest().body("비밀번호는 최소 6자 이상이어야 합니다.");
+        if (req.getPhone() == null || req.getPhone().isBlank())
+            return ResponseEntity.badRequest().body("전화번호를 입력해주세요.");
+        if (req.getDateOfBirth() == null || req.getDateOfBirth().isBlank())
+            return ResponseEntity.badRequest().body("생년월일을 입력해주세요.");
+        if (req.getAddress() == null || req.getAddress().isBlank())
+            return ResponseEntity.badRequest().body("주소를 입력해주세요.");
 
         try {
-            User u = new User();
-            u.setName(req.getName());
-            u.setEmail(req.getEmail());
-            u.setPassword(req.getPassword()); // 암호화는 Service에서 처리
-            User saved = loginService.register(u);
+            // String을 LocalDate로 변환
+            java.time.LocalDate dateOfBirth = java.time.LocalDate.parse(req.getDateOfBirth());
+            
+            // 새로운 createUserWithDateOfBirth 메서드 사용
+            User saved = loginService.createUserWithDateOfBirth(
+                req.getName(),
+                req.getEmail(),
+                req.getPassword(),
+                req.getPhone(),
+                req.getAddress(),
+                dateOfBirth
+            );
 
             String token = jwtUtil.generateToken(saved);
             return ResponseEntity.ok(new AuthResponse(token, toUserInfo(saved)));
+        } catch (java.time.format.DateTimeParseException e) {
+            return ResponseEntity.badRequest().body("올바른 생년월일 형식을 입력해주세요. (YYYY-MM-DD)");
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (Exception e) {
@@ -69,6 +84,24 @@ public class LoginController {
             return ResponseEntity.badRequest().body("비밀번호를 입력해주세요.");
 
         var opt = loginService.login(req.getEmail().trim(), req.getPassword());
+        if (opt.isPresent()) {
+            var u = opt.get();
+            String token = jwtUtil.generateToken(u);
+            return ResponseEntity.ok(new AuthResponse(token, toUserInfo(u)));
+        } else {
+            return ResponseEntity.status(401).body("로그인 실패: 이메일 또는 비밀번호가 일치하지 않습니다.");
+        }
+    }
+
+    // 로그인(Query Parameters) - 호환성을 위해 추가
+    @PostMapping("/users/login-params")
+    public ResponseEntity<?> loginWithParams(@RequestParam String email, @RequestParam String password) {
+        if (email == null || email.isBlank())
+            return ResponseEntity.badRequest().body("이메일을 입력해주세요.");
+        if (password == null || password.isBlank())
+            return ResponseEntity.badRequest().body("비밀번호를 입력해주세요.");
+
+        var opt = loginService.login(email.trim(), password);
         if (opt.isPresent()) {
             var u = opt.get();
             String token = jwtUtil.generateToken(u);
@@ -132,9 +165,51 @@ public class LoginController {
         m.put("id", u.getId());
         m.put("name", u.getName());
         m.put("email", u.getEmail());
-        m.put("provider", u.getProvider().toString());
-        m.put("profileImageUrl", u.getProfileImageUrl());
+        m.put("phone", u.getPhone());
+        m.put("address", u.getAddress());
+        m.put("dateOfBirth", u.getDateOfBirth());
+        // include role for admin guard checks on frontend
+        if (u.getRole() != null) {
+            m.put("role", u.getRole().name());
+        }
         m.put("createdOn", u.getCreatedOn());
         return m;
     }
+
+    // 관리자 생성 → 토큰 즉시 발급
+    @PostMapping("/admins/register")
+    public ResponseEntity<?> registerAdmin(@RequestBody RegisterRequest req) {
+        if (req.getName() == null || req.getName().isBlank())
+            return ResponseEntity.badRequest().body("이름을 입력해주세요.");
+        if (req.getEmail() == null || req.getEmail().isBlank())
+            return ResponseEntity.badRequest().body("이메일을 입력해주세요.");
+        if (req.getPassword() == null || req.getPassword().isBlank())
+            return ResponseEntity.badRequest().body("비밀번호를 입력해주세요.");
+        if (req.getPassword().length() < 6)
+            return ResponseEntity.badRequest().body("비밀번호는 최소 6자 이상이어야 합니다.");
+        if (req.getPhone() == null || req.getPhone().isBlank())
+            return ResponseEntity.badRequest().body("전화번호를 입력해주세요.");
+        if (req.getDateOfBirth() == null || req.getDateOfBirth().isBlank())
+            return ResponseEntity.badRequest().body("생년월일을 입력해주세요.");
+        if (req.getAddress() == null || req.getAddress().isBlank())
+            return ResponseEntity.badRequest().body("주소를 입력해주세요.");
+
+        try {
+            java.time.LocalDate dob = java.time.LocalDate.parse(req.getDateOfBirth());
+            User saved = loginService.createAdminWithDateOfBirth(
+                    req.getName(), req.getEmail(), req.getPassword(),
+                    req.getPhone(), req.getAddress(), dob
+            );
+            String token = jwtUtil.generateToken(saved);
+            return ResponseEntity.ok(new AuthResponse(token, toUserInfo(saved)));
+        } catch (java.time.format.DateTimeParseException e) {
+            return ResponseEntity.badRequest().body("올바른 생년월일 형식을 입력해주세요. (YYYY-MM-DD)");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            log.error("registerAdmin error", e);
+            return ResponseEntity.internalServerError().body("관리자 생성 중 오류가 발생했습니다.");
+        }
+    }
+
 }

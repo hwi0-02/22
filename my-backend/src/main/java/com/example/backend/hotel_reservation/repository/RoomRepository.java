@@ -13,6 +13,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
     // ✅ 호텔 상세에서 객실 리스트 필요
     List<Room> findByHotelId(Long hotelId);
 
+    long countByHotelId(Long hotelId);
+
     // (기존 사용하던 쿼리 유지)
     @Query("select r.hotelId from Room r where r.id = :roomId")
     Long findHotelIdByRoomId(@Param("roomId") Long roomId);

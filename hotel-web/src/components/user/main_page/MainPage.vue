@@ -39,6 +39,13 @@
           <div class="destination-info">
             <h3>{{ place.name }}</h3>
             <p>{{ place.description }}</p>
+
+      <!-- 관리자 접근 버튼 -->
+      <section v-if="isAdmin" class="admin-access" style="text-align:center;margin:24px 0;">
+        <router-link to="/admin" class="admin-btn" style="display:inline-block;padding:10px 16px;border-radius:6px;background:#111;color:#fff;">
+          관리자 패널 바로가기
+        </router-link>
+      </section>
           </div>
         </swiper-slide>
       </swiper>

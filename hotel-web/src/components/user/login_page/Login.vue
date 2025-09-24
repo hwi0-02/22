@@ -103,16 +103,20 @@ export default {
       }
 
       try {
-const response = await http.post("/users/login", {
-  email: this.email,
-  password: this.password,
-});
+        const response = await http.post("/users/login", {
+          email: this.email,
+          password: this.password
+        });
         console.log("로그인 성공:", response.data);
         
         // JWT 토큰을 로컬 스토리지에 저장
         if (response.data.token) {
           localStorage.setItem('token', response.data.token);
           localStorage.setItem('user', JSON.stringify(response.data.user));
+          // 사용자 역할 저장
+          if (response.data.user && response.data.user.role) {
+            localStorage.setItem('userRole', response.data.user.role);
+          }
         }
         // 비밀번호 저장(remember) 처리
         if (this.remember) {
@@ -123,11 +127,28 @@ const response = await http.post("/users/login", {
           localStorage.removeItem('savedPassword');
         }
 
-        // 로그인 후 메인 페이지 이동
-        this.$router.push('/');
+        // 로그인 후 페이지 이동
+        if (response.data.user && response.data.user.role === 'ADMIN') {
+          // 관리자인 경우 관리자 페이지로 이동
+          this.$router.push('/admin');
+        } else {
+          // 일반 사용자인 경우 메인 페이지로 이동
+          this.$router.push('/');
+        }
       } catch (error) {
         console.error("로그인 실패:", error.response?.data || error.message);
-        alert(error.response?.data || '로그인에 실패했습니다.');
+        
+        if (error.response) {
+          // 서버에서 응답이 있는 경우
+          const errorMsg = error.response.data || '로그인에 실패했습니다.';
+          alert(errorMsg);
+        } else if (error.request) {
+          // 요청은 보냈지만 응답이 없는 경우
+          alert('서버에 연결할 수 없습니다. 네트워크를 확인해주세요.');
+        } else {
+          // 요청 설정 중 오류가 발생한 경우
+          alert('로그인 요청 중 오류가 발생했습니다.');
+        }
       }
     },
     isValidEmail(email) {

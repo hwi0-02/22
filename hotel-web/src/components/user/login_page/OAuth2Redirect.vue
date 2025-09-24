@@ -37,6 +37,9 @@ export default {
           localStorage.setItem('userName', userInfo.name);
           localStorage.setItem('userEmail', userInfo.email);
           localStorage.setItem('userProvider', userInfo.provider);
+          if (userInfo.role) {
+            localStorage.setItem('userRole', userInfo.role);
+          }
           
           // 현재 로그인에 사용된 provider를 표시 (URL 파라미터 우선)
           const displayProvider = currentProvider || userInfo.provider;
@@ -56,8 +59,12 @@ export default {
           
           alert(`${userInfo.name}님, ${providerDisplayName} 로그인 성공!`);
           
-          // 메인 페이지로 리다이렉트
-          this.$router.push('/');
+          // 역할에 따른 리다이렉트
+          if (userInfo.role === 'ADMIN') {
+            this.$router.push('/admin');
+          } else {
+            this.$router.push('/');
+          }
           
         } catch (error) {
           console.error('사용자 정보 가져오기 실패:', error);

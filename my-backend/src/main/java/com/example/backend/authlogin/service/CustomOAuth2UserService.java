@@ -32,9 +32,9 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     .getProviderDetails().getUserInfoEndpoint().getUserNameAttributeName();
 
             OAuth2Attributes attributes = OAuth2Attributes.of(registrationId, userNameAttributeName, oauth2User.getAttributes());
-            User user = saveOrUpdate(attributes);
+            User user = saveOrUpdate(attributes, registrationId);
             
-            log.info("OAuth2 사용자 로드 완료: {} ({})", user.getEmail(), user.getProvider());
+            log.info("OAuth2 사용자 로드 완료: {}", user.getEmail());
             return new CustomOAuth2User(user, oauth2User.getAttributes(), userNameAttributeName);
             
         } catch (Exception e) {
@@ -43,44 +43,52 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         }
     }
 
-    private User saveOrUpdate(OAuth2Attributes attributes) {
+    private User saveOrUpdate(OAuth2Attributes attributes, String registrationId) {
         List<User> existingUsers = loginRepository.findAllByEmail(attributes.getEmail());
         
         if (!existingUsers.isEmpty()) {
+            // 기존 사용자 찾음 - 간소화된 업데이트
             User mainUser = existingUsers.get(0);
             
-            // 중복 계정 통합 및 소셜 계정 추가
-            for (User duplicateUser : existingUsers) {
-                if (!duplicateUser.getId().equals(mainUser.getId())) {
-                    mainUser.mergeSocialProvider(duplicateUser.getProvider(), duplicateUser.getProviderId());
-                    loginRepository.delete(duplicateUser);
-                    log.info("중복 계정 통합: {} 계정을 메인 계정에 병합", duplicateUser.getProvider());
-                }
+            // 중복 계정 제거 (첫 번째 계정만 유지)
+            for (int i = 1; i < existingUsers.size(); i++) {
+                loginRepository.delete(existingUsers.get(i));
+                log.info("중복 계정 제거: {}", existingUsers.get(i).getId());
             }
             
-            // 새로운 소셜 계정 추가
-            if (!mainUser.hasSocialProvider(attributes.getProvider())) {
-                mainUser.mergeSocialProvider(attributes.getProvider(), attributes.getProviderId());
-                log.info("새 소셜 계정 추가: {} -> {}", attributes.getProvider(), mainUser.getEmail());
-            }
-            
-            // 사용자 정보 업데이트
-            mainUser.update(attributes.getName(), attributes.getProfileImageUrl());
+            // 사용자 정보 업데이트 (간소화)
+            mainUser.update(attributes.getName(), null, null);
             return loginRepository.save(mainUser);
             
         } else {
-            // 새 사용자 생성
+            // 새 사용자 생성 (소셜 로그인)
+            // 소셜 로그인 시 기본 생년월일 설정
             User newUser = User.builder()
                     .name(attributes.getName())
                     .email(attributes.getEmail())
-                    .providerId(attributes.getProviderId())
-                    .provider(attributes.getProvider())
-                    .profileImageUrl(attributes.getProfileImageUrl())
+                    .password(null) // 소셜 로그인은 비밀번호 없음
+                    .phone("010-0000-0000") // 기본 전화번호
+                    .address("주소 미입력") // 기본 주소
+                    .dateOfBirth(java.time.LocalDate.of(1990, 1, 1)) // 기본 생년월일
+                    .provider(getProviderFromRegistrationId(registrationId))
                     .build();
                     
             User savedUser = loginRepository.save(newUser);
-            log.info("새 사용자 생성: {} ({})", savedUser.getEmail(), savedUser.getProvider());
+            log.info("새 소셜 사용자 생성: {}", savedUser.getEmail());
             return savedUser;
+        }
+    }
+
+    private User.Provider getProviderFromRegistrationId(String registrationId) {
+        switch (registrationId.toLowerCase()) {
+            case "google":
+                return User.Provider.GOOGLE;
+            case "naver":
+                return User.Provider.NAVER;
+            case "kakao":
+                return User.Provider.KAKAO;
+            default:
+                return User.Provider.LOCAL;
         }
     }
 }

@@ -77,4 +77,11 @@ public class Room {
 
     @Column(name = "check_out_time")
     private java.sql.Time checkOutTime;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    @Builder.Default
+    private RoomStatus status = RoomStatus.ACTIVE;
+
+    public enum RoomStatus { ACTIVE, INACTIVE, MAINTENANCE }
 }

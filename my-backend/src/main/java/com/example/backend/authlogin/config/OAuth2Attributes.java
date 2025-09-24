@@ -16,9 +16,9 @@ public class OAuth2Attributes {
     private String email;
     private String profileImageUrl;
     private String providerId;
-    private User.Provider provider;
+    private String provider; // 간소화: String으로 변경
 
-    private OAuth2Attributes(Map<String, Object> attributes, String nameAttributeKey, String name, String email, String profileImageUrl, String providerId, User.Provider provider) {
+    private OAuth2Attributes(Map<String, Object> attributes, String nameAttributeKey, String name, String email, String profileImageUrl, String providerId, String provider) {
         this.attributes = attributes;
         this.nameAttributeKey = nameAttributeKey;
         this.name = name;
@@ -47,7 +47,7 @@ public class OAuth2Attributes {
             .email((String) attributes.get("email"))
             .profileImageUrl((String) attributes.get("picture"))
             .providerId((String) attributes.get("sub"))
-            .provider(User.Provider.GOOGLE)
+            .provider("GOOGLE")
             .attributes(attributes)
             .nameAttributeKey(userNameAttributeName)
             .build();
@@ -62,7 +62,7 @@ public class OAuth2Attributes {
             .email((String) response.get("email"))
             .profileImageUrl((String) response.get("profile_image"))
             .providerId((String) response.get("id"))
-            .provider(User.Provider.NAVER)
+            .provider("NAVER")
             .attributes(attributes)
             .nameAttributeKey(userNameAttributeName)
             .build();
@@ -88,7 +88,7 @@ public class OAuth2Attributes {
             .email((String) account.get("email"))
             .profileImageUrl(profileImageUrl)
             .providerId(attributes.get("id").toString())
-            .provider(User.Provider.KAKAO)
+            .provider("KAKAO")
             .attributes(attributes)
             .nameAttributeKey(userNameAttributeName)
             .build();
@@ -105,7 +105,7 @@ public class OAuth2Attributes {
         private String email;
         private String profileImageUrl;
         private String providerId;
-        private User.Provider provider;
+        private String provider; // 간소화: String으로 변경
 
         OAuth2AttributesBuilder attributes(Map<String, Object> attributes) {
             this.attributes = attributes;
@@ -137,7 +137,7 @@ public class OAuth2Attributes {
             return this;
         }
 
-        OAuth2AttributesBuilder provider(User.Provider provider) {
+        OAuth2AttributesBuilder provider(String provider) { // String으로 변경
             this.provider = provider;
             return this;
         }
